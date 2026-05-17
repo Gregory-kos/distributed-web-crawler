@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h3 class="fw-bold mb-0">Concurrency Metrics</h3>
+        <p class="text-muted">Detailed analysis of distributed system behavior.</p>
+    </div>
+</div>
+
+<!-- Row 1: Health & Anomalies -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-12">
+        <div class="card shadow-sm border-danger border-start border-4">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold text-danger mb-1"><i class="bi bi-heart-pulse-fill me-2"></i>Deadlock Detector</h5>
+                    <p class="text-muted mb-0 small">Heuristic analysis of queue stagnation vs worker activity.</p>
+                </div>
+                <div class="text-end" style="width: 300px;">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="fw-bold text-danger">Risk Probability</span>
+                        <span class="fw-bold" id="deadlock-val">0%</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" id="deadlock-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: The Heavy Hitters -->
+<div class="row g-4 mb-4">
+    <!-- Queue Depth -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-layers-fill text-warning me-2"></i>Global Queue Depth (Producer/Consumer)</h6>
+                <span class="badge bg-light text-dark border">Latency Check</span>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;"><canvas id="queueChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lock Status -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-lock-fill text-danger me-2"></i>Resource Locks</h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-4">
+                    <div id="lock-icon" class="display-1 text-muted mb-3"><i class="bi bi-unlock"></i></div>
+                    <h5 id="lock-status">No Locks Held</h5>
+                    <p class="text-muted small">Status of distributed keyword exclusion locks.</p>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Blocked Threads:</span>
+                    <span class="fw-bold" id="blocked-threads">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 3: Termination & Speed -->
+<div class="row g-4">
+    <!-- Dijkstra Scholten -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-graph-down text-primary me-2"></i>Termination Detection (Dijkstra-Scholten)</h6>
+            </div>
+            <div class="card-body">
+                <div style="height: 250px;"><canvas id="dijkstraChart"></canvas></div>
+                <div class="mt-3 small text-muted">
+                    Total Deficit: <strong id="deficit-val" class="text-primary">0</strong>. System terminates when deficit reaches 0 and queue is empty.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Throughput -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-speedometer2 text-info me-2"></i>System Throughput</h6>
+            </div>
+            <div class="card-body">
+                <div style="height: 250px;"><canvas id="speedChart"></canvas></div>
+                <div class="mt-3 small text-muted">
+                    Current Rate: <strong id="speed-val" class="text-info">0</strong> pages/sec.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- Chart Config ---
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        elements: { point: { radius: 0 } },
+        scales: {
+            x: { grid: { display: false }, ticks: { display: false } },
+            y: { beginAtZero: true, grid: { borderDash: [2, 4] } }
+        },
+        plugins: { legend: { display: false } }
+    };
+
+    const ctxQ = document.getElementById('queueChart').getContext('2d');
+    const queueChart = new Chart(ctxQ, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Pending URLs', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.4 }] },
+        options: commonOptions
+    });
+
+    const ctxD = document.getElementById('dijkstraChart').getContext('2d');
+    const dChart = new Chart(ctxD, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Deficit', data: [], borderColor: '#3b82f6', borderWidth: 2, tension: 0.1 }] },
+        options: commonOptions
+    });
+
+    const ctxS = document.getElementById('speedChart').getContext('2d');
+    const sChart = new Chart(ctxS, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Pages/Sec', data: [], borderColor: '#06b6d4', borderWidth: 2, tension: 0.4 }] },
+        options: commonOptions
+    });
+
+    // --- Update Loop ---
+    function updateMetrics() {
+        // Fetch History
+        fetch('/api/history').then(r=>r.json()).then(h => {
+            if(!h.labels) return;
+
+            // Update Queue Chart
+            queueChart.data.labels = h.labels;
+            queueChart.data.datasets[0].data = h.queue;
+            queueChart.update();
+
+            // Update Dijkstra Chart
+            dChart.data.labels = h.labels;
+            dChart.data.datasets[0].data = h.deficit;
+            dChart.update();
+            if(h.deficit.length > 0) document.getElementById('deficit-val').innerText = h.deficit[h.deficit.length-1];
+
+            // Update Speed Chart
+            sChart.data.labels = h.labels;
+            sChart.data.datasets[0].data = h.speed;
+            sChart.update();
+            if(h.speed.length > 0) document.getElementById('speed-val').innerText = h.speed[h.speed.length-1];
+        });
+
+        // Fetch Lock Status & Anomalies
+        fetch('/api/concurrency').then(r=>r.json()).then(d => {
+            const icon = document.getElementById('lock-icon');
+            const status = document.getElementById('lock-status');
+            
+            if(d.locked) {
+                icon.innerHTML = '<i class="bi bi-lock-fill text-danger"></i>';
+                status.innerHTML = `<span class="text-danger">Locked by ${d.holder}</span>`;
+            } else {
+                icon.innerHTML = '<i class="bi bi-unlock text-success"></i>';
+                status.innerHTML = 'No Locks Held';
+            }
+            document.getElementById('blocked-threads').innerText = d.waiting;
+            
+            // Deadlock Monitor
+            const risk = d.deadlock_risk || 0;
+            document.getElementById('deadlock-val').innerText = risk + "%";
+            document.getElementById('deadlock-bar').style.width = risk + "%";
+        });
+    }
+
+    setInterval(updateMetrics, 1000);
+    updateMetrics();
+</script>
+{% endblock %}

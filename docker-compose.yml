@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # 1. Η Βάση Δεδομένων Redis
+  redis:
+    image: "redis:6-alpine"
+    ports:
+      # Κάνουμε expose την port του Redis προαιρετικά, για να μπορούμε να το δούμε με εξωτερικά εργαλεία
+      - "6379:6379"
+
+  # 2. Ο Master Node (Ο Εγκέφαλος & Dashboard)
+  master:
+    # Χτίζει την εικόνα από το Dockerfile που φτιάξαμε
+    build: .
+    # Η εντολή που θα τρέξει μέσα στο container
+    command: python master_node.py
+    ports:
+      # Κάνουμε expose την port του Web Dashboard για να το βλέπουμε στον browser
+      - "5000:5000"
+    environment:
+      # ΕΔΩ ΕΙΝΑΙ Η ΜΑΓΕΙΑ: Λέμε στον Master να βρει το Redis στο hostname 'redis'
+      # αντί για 'localhost'. Το Docker αναλαμβάνει το networking.
+      - REDIS_HOST=redis
+    # Ο Master εξαρτάται από το Redis, άρα θα περιμένει να ξεκινήσει πρώτα το Redis
+    depends_on:
+      - redis
+
+  # 3. Οι Workers (Οι Εργάτες)
+  worker:
+    build: .
+    command: python worker_node.py
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    # --- SCALABILITY ---
+    # Εδώ ορίζουμε πόσα αντίγραφα (workers) θέλουμε να ξεκινήσουν.
+    # Μπορούμε να το αλλάξουμε ανά πάσα στιγμή.
+    deploy:
+      replicas: 5

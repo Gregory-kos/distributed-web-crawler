@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3 align-items-center">
+    <div class="col-md-6">
+        <h4 class="mb-0"><i class="bi bi-database-fill-check text-success me-2"></i>Data Explorer</h4>
+        <p class="text-muted mb-0 small">Viewing most recent 100 records</p>
+    </div>
+    <div class="col-md-6 text-end">
+        <div class="d-flex justify-content-end gap-2">
+            <input type="text" id="searchBox" class="form-control w-50" placeholder="Filter current view..." onkeyup="filterTable()">
+            <a href="/api/export" class="btn btn-primary"><i class="bi bi-download"></i> CSV</a>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="dataTable">
+                <thead class="bg-light text-secondary small text-uppercase">
+                    <tr>
+                        <th class="ps-4" style="width: 40%;">Title</th>
+                        <th style="width: 30%;">URL</th>
+                        <th style="width: 10%;">Worker</th>
+                        <th style="width: 10%;">Domain</th>
+                        <th style="width: 10%;">Time</th>
+                    </tr>
+                </thead>
+                <tbody id="data-list" class="small">
+                    <tr><td colspan="5" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allData = [];
+
+    function updateData() {
+        fetch('/api/data/recent').then(r=>r.json()).then(data => {
+            allData = data;
+            filterTable(); // Re-render with current filter
+        });
+    }
+
+    function renderTable(data) {
+        let html = '';
+        if(data.length === 0) {
+            html = '<tr><td colspan="5" class="text-center py-5 text-muted">No data collected yet. Start a crawl job.</td></tr>';
+        } else {
+            data.forEach(item => {
+                const title = item.title ? (item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title) : '<span class="text-muted">No Title</span>';
+                const urlShort = item.url.length > 60 ? item.url.substring(0, 60) + '...' : item.url;
+                
+                html += `<tr>
+                    <td class="ps-4 fw-bold text-dark">${title}</td>
+                    <td><a href="${item.url}" target="_blank" class="text-primary text-decoration-none font-monospace">${urlShort}</a></td>
+                    <td><span class="badge bg-light text-dark border font-monospace">${item.worker || 'N/A'}</span></td>
+                    <td>${item.domain || '-'}</td>
+                    <td>${item.duration ? item.duration.toFixed(3) + 's' : '-'}</td>
+                </tr>`;
+            });
+        }
+        document.getElementById('data-list').innerHTML = html;
+    }
+
+    function filterTable() {
+        const query = document.getElementById('searchBox').value.toLowerCase();
+        const filtered = allData.filter(item => 
+            (item.title && item.title.toLowerCase().includes(query)) || 
+            (item.url && item.url.toLowerCase().includes(query))
+        );
+        renderTable(filtered);
+    }
+
+    // Refresh every 2 seconds
+    setInterval(updateData, 2000);
+    updateData();
+</script>
+{% endblock %}

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Crawler | Concurrency Ops</title>
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjleoDx872f873GwMWOqXUd9DKV5b+nC7P6/x2yBUJp+n9p+Oq7g+Xl+xQy2c/5t+sU4s/7nK9g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- JS Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-Lnvo64nC8DZYxa9tJg6O0qgGbauxtmQ4M1o0Cwr8df8WpY+gHOz53S2FjsaY7uD2qL4qQzO+F+l+c7l9p5q+g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <style>
+        :root { 
+            --sidebar-width: 260px;
+            --bg: #f3f4f6; 
+            --card: #ffffff; 
+            --text: #1f2937; 
+            --text-muted: #6b7280;
+            --border: #e5e7eb; 
+            --primary: #3b82f6;
+            --sidebar-bg: #111827;
+            --sidebar-text: #d1d5db;
+            --sidebar-active: #1f2937;
+        }
+        [data-theme="dark"] { 
+            --bg: #0f172a; 
+            --card: #1e293b; 
+            --text: #f1f5f9; 
+            --text-muted: #94a3b8;
+            --border: #334155; 
+            --primary: #60a5fa;
+            --sidebar-bg: #020617;
+            --sidebar-active: #1e293b;
+        }
+        
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; display: flex; min-height: 100vh; overflow-x: hidden; }
+        
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            position: fixed;
+            top: 0; bottom: 0; left: 0;
+            display: flex; flex-direction: column;
+            padding: 1rem;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-brand {
+            font-size: 1.25rem; font-weight: 700; color: #fff; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.75rem;
+        }
+        .nav-link {
+            color: var(--sidebar-text); padding: 0.75rem 1rem; border-radius: 0.5rem; margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 500; transition: all 0.2s;
+        }
+        .nav-link:hover, .nav-link.active {
+            background: var(--sidebar-active); color: #fff; text-decoration: none;
+        }
+        .nav-link.active { border-left: 3px solid var(--primary); }
+        .nav-link i { font-size: 1.1rem; }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 2rem;
+            width: calc(100% - var(--sidebar-width));
+        }
+        
+        .card { background: var(--card); border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-radius: 0.75rem; margin-bottom: 1.5rem; }
+        .card-header { background: transparent; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; font-weight: 600; }
+        
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Utility */
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .bg-running { background-color: #10b981; }
+        .bg-paused { background-color: #f59e0b; }
+        .bg-stopped { background-color: #ef4444; }
+
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .main-content { margin-left: 0; width: 100%; }
+            .sidebar.show { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-diagram-3-fill text-primary"></i> 
+            <span>CRAWLER OPS</span>
+        </div>
+        
+        <div class="nav flex-column">
+            <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">
+                <i class="bi bi-grid-1x2-fill"></i> Dashboard
+            </a>
+            <a href="/concurrency" class="nav-link {% if request.path == '/concurrency' %}active{% endif %}">
+                <i class="bi bi-graph-up-arrow"></i> Concurrency
+            </a>
+            <a href="/workers" class="nav-link {% if request.path == '/workers' %}active{% endif %}">
+                <i class="bi bi-cpu-fill"></i> Worker Fleet
+            </a>
+            <a href="/data" class="nav-link {% if request.path == '/data' %}active{% endif %}">
+                <i class="bi bi-database-fill"></i> Data Explorer
+            </a>
+        </div>
+        
+        <div class="mt-auto">
+            <div class="p-3 bg-opacity-10 bg-white rounded-3 small">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">System Status</span>
+                    <span id="sys-status-badge" class="badge bg-success">RUNNING</span>
+                </div>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-warning btn-sm" onclick="control('pause')"><i class="bi bi-pause-fill"></i> Pause</button>
+                    <button class="btn btn-success btn-sm" onclick="control('resume')"><i class="bi bi-play-fill"></i> Resume</button>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary">
+                <small class="text-muted">v2.0.0 Distributed</small>
+                <button class="btn btn-link text-muted p-0" onclick="toggleTheme()"><i class="bi bi-moon-stars-fill"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="main-content">
+        <!-- Mobile Toggle -->
+        <button class="btn btn-outline-secondary d-md-none mb-3" onclick="document.getElementById('sidebar').classList.toggle('show')">
+            <i class="bi bi-list"></i> Menu
+        </button>
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+        }
+        
+        function control(act) {
+            fetch('/api/control_global', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:act})})
+            .then(r=>r.json()).then(() => {
+                // Update badge locally for instant feedback
+                const badge = document.getElementById('sys-status-badge');
+                if(act === 'pause') { badge.className = 'badge bg-warning'; badge.innerText = 'PAUSED'; }
+                else { badge.className = 'badge bg-success'; badge.innerText = 'RUNNING'; }
+            });
+        }
+        
+        // Periodic Status Check for the Sidebar Badge
+        setInterval(() => {
+            fetch('/api/stats').then(r=>r.json()).then(d => {
+                const badge = document.getElementById('sys-status-badge');
+                if(d.status === 'paused') { badge.className = 'badge bg-warning'; badge.innerText = 'PAUSED'; }
+                else { badge.className = 'badge bg-success'; badge.innerText = 'RUNNING'; }
+            });
+        }, 2000);
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

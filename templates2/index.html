@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">System Overview</h3>
+        <p class="text-muted mb-0">Real-time status of the distributed cluster.</p>
+    </div>
+    <div>
+        <span class="badge bg-primary fs-6"><i class="bi bi-clock"></i> <span id="uptime">00:00:00</span></span>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm bg-gradient-primary text-white" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <small class="opacity-75 text-uppercase fw-bold">Total Pages</small>
+                        <h2 class="fw-bold mb-0 mt-2" id="total-crawled">0</h2>
+                    </div>
+                    <i class="bi bi-files fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">Queue Size</small>
+                        <h2 class="fw-bold mb-0 mt-2 text-warning" id="queue-size">0</h2>
+                    </div>
+                    <i class="bi bi-layers-fill fs-1 text-warning opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">Load Balance Score</small>
+                        <h2 class="fw-bold mb-0 mt-2 text-success" id="fairness-score">-</h2>
+                        <small id="fairness-msg" class="text-muted" style="font-size: 0.7rem;">Calculating...</small>
+                    </div>
+                    <i class="bi bi-scale fs-1 text-success opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">Throughput</small>
+                        <h2 class="fw-bold mb-0 mt-2 text-info"><span id="speed">0</span> <small class="fs-6 text-muted">pg/s</small></h2>
+                    </div>
+                    <i class="bi bi-speedometer2 fs-1 text-info opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cluster Topology Map -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-diagram-3 me-2"></i>Live Cluster Topology</h6>
+                <span class="badge bg-light text-dark border">Force-Directed Graph</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="network-graph" style="height: 350px; background: #f8fafc;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Live Logs -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-terminal-fill me-2"></i>Live System Logs</h6>
+                <span class="badge bg-secondary">Real-time</span>
+            </div>
+            <div class="card-body p-0">
+                <div id="log-feed" class="p-3 font-monospace small" style="height: 300px; overflow-y: auto; background: #1e293b; color: #cbd5e1;">
+                    <div class="text-muted text-center mt-5">Waiting for logs...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Domain Distribution -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-pie-chart-fill me-2"></i>Top Domains</h6>
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                <div style="width: 100%; height: 250px;">
+                    <canvas id="domainChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // --- Chart Init ---
+    const ctxP = document.getElementById('domainChart').getContext('2d');
+    const pChart = new Chart(ctxP, { 
+        type: 'doughnut', 
+        data: { labels:[], datasets:[{ data:[], backgroundColor:['#3b82f6','#10b981','#f59e0b', '#ef4444', '#8b5cf6'], borderWidth: 0 }] }, 
+        options:{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } } 
+    });
+
+    // --- Network Graph Init (Vis.js) ---
+    const container = document.getElementById('network-graph');
+    const nodes = new vis.DataSet([{id: 'Master', label: 'MASTER NODE', shape: 'hexagon', color: '#111827', font: {color: 'white'}}]);
+    const edges = new vis.DataSet([]);
+    const network = new vis.Network(container, { nodes: nodes, edges: edges }, {
+        physics: { stabilization: false, barnesHut: { springLength: 200 } },
+        nodes: { font: { face: 'Inter' } }
+    });
+
+    const startTime = Date.now();
+
+    function updateDashboard() {
+        // Fetch Main Stats & Fairness
+        fetch('/api/stats').then(r=>r.json()).then(data => {
+            document.getElementById('total-crawled').innerText = data.progress.current;
+            document.getElementById('queue-size').innerText = data.queues.url;
+            document.getElementById('speed').innerText = data.progress.speed;
+            
+            // Fairness
+            const f = data.fairness;
+            if(f) {
+                const fEl = document.getElementById('fairness-score');
+                fEl.innerText = f.score;
+                fEl.className = 'fw-bold mb-0 mt-2 ' + (f.score.includes('A') ? 'text-success' : (f.score === 'D' ? 'text-danger' : 'text-warning'));
+                document.getElementById('fairness-msg').innerText = f.msg;
+            }
+
+            // Logs (Dark Terminal Style)
+            const logPanel = document.getElementById('log-feed');
+            let logHtml = '';
+            if(data.logs && data.logs.length > 0) {
+                data.logs.forEach(line => {
+                    let color = '#94a3b8'; // default
+                    if(line.includes('Err')) color = '#ef4444';
+                    else if(line.includes('save')) color = '#10b981';
+                    else if(line.includes('Idle')) color = '#64748b';
+                    
+                    logHtml += `<div class="mb-1" style="color:${color}">${line}</div>`;
+                });
+                logPanel.innerHTML = logHtml;
+            }
+
+            // Chart
+            pChart.data.labels = data.domains.labels;
+            pChart.data.datasets[0].data = data.domains.data;
+            pChart.update();
+        });
+
+        // Fetch Workers for Graph
+        fetch('/api/workers').then(r=>r.json()).then(workers => {
+            const currentIds = new Set(workers.map(w => w.id));
+            
+            workers.forEach(w => {
+                // Determine Color based on status
+                let color = '#3b82f6'; // Default Blue
+                if(w.status.includes('Parsing')) color = '#f59e0b'; // Orange
+                else if(w.status.includes('Idle')) color = '#9ca3af'; // Grey
+                else if(w.status.includes('Err')) color = '#ef4444'; // Red
+
+                // Add or Update Node
+                if(!nodes.get(w.id)) {
+                    nodes.add({ id: w.id, label: w.id, shape: 'dot', color: color });
+                    edges.add({ from: 'Master', to: w.id });
+                } else {
+                    nodes.update({ id: w.id, color: color });
+                }
+            });
+
+            // Remove dead nodes
+            nodes.getIds().forEach(nid => {
+                if(nid !== 'Master' && !currentIds.has(nid)) {
+                    nodes.remove(nid);
+                }
+            });
+        });
+    }
+
+    setInterval(updateDashboard, 1000);
+    updateDashboard();
+</script>
+{% endblock %}

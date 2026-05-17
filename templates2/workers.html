@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3 align-items-center">
+    <div class="col-md-6">
+        <h4 class="mb-0"><i class="bi bi-hdd-rack-fill text-primary me-2"></i>Worker Fleet Status</h4>
+        <span class="text-muted small">Real-time telemetry from distributed nodes</span>
+    </div>
+    <div class="col-md-6 text-end">
+        <span class="badge bg-primary fs-6 rounded-pill px-3 py-2" id="worker-count">0 Nodes Online</span>
+    </div>
+</div>
+
+<div class="row g-4" id="worker-grid">
+    <div class="col-12 text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">Scanning for active nodes...</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateWorkers() {
+        fetch('/api/workers')
+        .then(r => r.json())
+        .then(workers => {
+            if (!workers) return;
+            document.getElementById('worker-count').innerText = workers.length + " Nodes Online";
+            let html = '';
+            
+            if(workers.length === 0) {
+                document.getElementById('worker-grid').innerHTML = '<div class="col-12 text-center py-5 text-muted">No workers connected.</div>';
+                return;
+            }
+
+            workers.sort((a,b) => a.id.localeCompare(b.id)); 
+
+            workers.forEach(w => {
+                // Safely access properties with defaults
+                const status = w.status || 'Unknown';
+                const jobs = w.jobs || 0;
+                const uptime = w.uptime || '-';
+                const cpu = w.cpu || 0;
+                const mem = w.memory || 0;
+                const latency = w.avg_latency || 0;
+
+                let statusColor = 'bg-success';
+                if(status.includes('Idle')) statusColor = 'bg-secondary';
+                if(status.includes('Err')) statusColor = 'bg-danger';
+                
+                let cpuClass = 'bg-success';
+                if(cpu > 50) cpuClass = 'bg-warning';
+                if(cpu > 80) cpuClass = 'bg-danger';
+
+                html += `
+                <div class="col-md-6 col-lg-4 col-xl-3">
+                    <div class="card h-100 shadow-sm border-0 position-relative overflow-hidden">
+                        <div class="position-absolute top-0 start-0 h-100 ${statusColor}" style="width: 5px;"></div>
+                        <div class="card-body ps-4">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 class="card-title fw-bold mb-0 font-monospace">${w.id}</h5>
+                                    <small class="text-muted"><i class="bi bi-clock"></i> ${uptime}</small>
+                                </div>
+                                <span class="badge ${statusColor} text-white">${status}</span>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span>CPU Load</span>
+                                    <span class="fw-bold">${cpu}%</span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar ${cpuClass}" role="progressbar" style="width: ${cpu}%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span>Memory</span>
+                                    <span class="fw-bold">${mem}%</span>
+                                </div>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width: ${mem}%"></div>
+                                </div>
+                            </div>
+
+                            <div class="row text-center g-2 mb-3">
+                                <div class="col-6">
+                                    <div class="bg-light rounded p-2">
+                                        <div class="small text-muted text-uppercase" style="font-size: 0.7rem;">Jobs</div>
+                                        <div class="fw-bold text-primary">${jobs}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="bg-light rounded p-2">
+                                        <div class="small text-muted text-uppercase" style="font-size: 0.7rem;">Avg Latency</div>
+                                        <div class="fw-bold text-dark">${latency}s</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('worker-grid').innerHTML = html;
+        })
+        .catch(err => console.error("Worker fetch error:", err));
+    }
+
+    function kill(id) {
+        if(confirm('Are you sure you want to terminate ' + id + '?')) {
+            fetch('/api/worker_control', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'kill', worker_id:id})});
+        }
+    }
+
+    setInterval(updateWorkers, 1000);
+    updateWorkers();
+</script>
+{% endblock %}
