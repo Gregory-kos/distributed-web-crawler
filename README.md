@@ -4,7 +4,7 @@ A high-performance, distributed web crawling system built with **Python**, **Red
 
 ---
 
-## 🚀 Key Features
+##  Key Features
 
 - **Distributed Architecture**: Scalable Master-Worker model using Redis as a high-speed message broker and state store.
 - **Termination Detection**: Accurate completion tracking using the **Dijkstra-Scholten algorithm**, ensuring the system stops only when all tasks are truly finished.
@@ -20,7 +20,7 @@ A high-performance, distributed web crawling system built with **Python**, **Red
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 ### 1. Master Node (The Brain)
 - Coordinates the entire fleet.
@@ -41,7 +41,7 @@ A high-performance, distributed web crawling system built with **Python**, **Red
 
 ---
 
-## 🛠️ Technical Deep Dive
+##  Technical Deep Dive
 
 ### Dijkstra-Scholten Algorithm
 In an asynchronous distributed system, knowing when "everyone is done" is hard. We implement a **Deficit-based** tracking system:
@@ -57,7 +57,7 @@ To prevent race conditions, complex operations like **RW-Lock acquisition** and 
 
 ---
 
-## 🚦 Getting Started
+##  Getting Started
 
 ### Prerequisites
 - Python 3.9+
@@ -96,7 +96,7 @@ From here you can:
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 - `final_assignment/`: Main source code.
     - `master_node.py`: Orchestrator logic.
     - `worker_node.py`: Crawling and worker logic.
@@ -107,14 +107,7 @@ From here you can:
 - `templates2/`: Flask UI templates.
 - `Dockerfile` & `docker-compose.yml`: Containerization setup.
 
----
 
-## 🎓 Academic Context
-This project was developed as an **optional assignment** for the **Concurrency Programming** course (Προγραμματισμός Ταυτοχρονισμού).
 
-Το έργο αυτό υλοποιήθηκε στα πλαίσια του μαθήματος **Προγραμματισμός Ταυτοχρονισμού** ως **προαιρετική απαλλακτική εργασία**.
 
----
 
-## 📝 License
-This project was developed for educational purposes as part of a distributed systems and concurrency study.
